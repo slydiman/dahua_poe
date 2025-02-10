@@ -1,0 +1,11 @@
+{
+  "domain": "dahua_poe",
+  "name": "Dahua POE",
+  "codeowners": ["@slydiman"],
+  "config_flow": true,
+  "documentation": "https://github.com/slydiman/dahua_poe",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/slydiman/dahua_poe/issues",
+  "requirements": ["requests"],
+  "version": "2025.02.10"
+}

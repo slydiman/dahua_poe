@@ -1,0 +1,31 @@
+{
+    "config": {
+        "abort": {
+            "reauth_successful": "Reauthentication was successful"
+        },
+        "error": {
+            "invalid_ip": "Invalid IP",
+            "invalid_password": "Invalid password",
+            "invalid_password_lock": "Invalid password (locked for 5 min)",
+            "sessions_limit": "Number of session connections exceeds limit",
+            "login_failed": "Login failed",
+            "unknown": "unknown"
+        },
+        "step": {
+            "user": {
+                "title": "Fill in your IP and password",
+                "data": {
+                    "ip_address": "IP",
+                    "password": "Password"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Reauthenticate with your credentials",
+                "data": {
+                    "ip_address": "IP",
+                    "password": "Password"
+                }
+            }
+        }
+    }
+}
