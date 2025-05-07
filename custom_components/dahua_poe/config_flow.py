@@ -26,13 +26,13 @@ class DahuaPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 def login():
                     uid, err = DahuaPOE_local_login(ip, password)
                     if uid:
-                        info = DahuaPOE_local_get(ip, uid, "/get_device_info.cgi")
+                        info, err = DahuaPOE_local_get(ip, uid, "/get_device_info.cgi")
                         if info:
                             # POE8/DH-CS4010-8ET-110/AH08EBBPAJ00651/F8:CE:07:7B:51:86/V1.001.0000000.7.R/2024-09-28/12919/1/V2.4
                             uid = info.split("/")[0]
                         else:
                             uid = ip
-                    return uid, err
+                    return uid, err or "unknown"
 
                 title, err = await self.hass.async_add_executor_job(login)
                 if title is None:

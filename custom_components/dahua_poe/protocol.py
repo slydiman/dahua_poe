@@ -3,80 +3,87 @@ from hashlib import sha256, md5
 from .const import LOGGER
 
 
-DahuaPOE_session = {}
+_USER_AGENT = "Mozilla/5.0 (Linux; Android 12)"
+# _USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 
 
 def DahuaPOE_local_get(ip: str, uid: str, url: str):
-    global DahuaPOE_session
+    LOGGER.debug(f"DahuaPOE_local_get({ip}, {uid}, {url})...")
+
     headers = {
-        "user-agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 uni-app Html5Plus/1.0 (Immersed/24.0)",
-        "Connection": "keep-alive",
         "Accept": "*/*",
         "Accept-Encoding": "gzip, deflate",
+        "Connection": "close",
+        "User-Agent": _USER_AGENT,
     }
     if uid:
+        headers["Cookie"] = f"sessionID={uid}"
         headers["X-Cookie"] = f"sessionID={uid}"
+
     try:
-        if DahuaPOE_session.get(ip, None) is None:
-            DahuaPOE_session[ip] = requests.Session()
-        response = DahuaPOE_session[ip].get(
-            "http://" + ip + url, headers=headers, cookies=DahuaPOE_session[ip].cookies
+        response = requests.get(
+            f"http://{ip}{url}", headers=headers, verify=False, timeout=(5, 5)
         )
     except Exception as e:
-        LOGGER.exception(f"DahuaPOE_local_get({ip}, {uid}, {url}): exception {e}")
-        DahuaPOE_session[ip].close()
-        DahuaPOE_session[ip] = None
-        return None
-
-    if response.status_code != requests.codes.ok:
-        LOGGER.warning(
-            f"DahuaPOE_local_get({ip}, {uid}, {url}): response code HTTP {response.status_code}"
-        )
-        return None
-
-    return response.text
-
-
-def DahuaPOE_local_post(ip: str, uid: str, url: str, data):
-    global DahuaPOE_session
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "user-agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 uni-app Html5Plus/1.0 (Immersed/24.0)",
-        "Connection": "keep-alive",
-        "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
-    }
-    if uid:
-        headers["X-Cookie"] = f"sessionID={uid}"
-    try:
-        if DahuaPOE_session.get(ip, None) is None:
-            DahuaPOE_session[ip] = requests.Session()
-        response = DahuaPOE_session[ip].post(
-            "http://" + ip + url,
-            headers=headers,
-            data={"params": data},
-            cookies=DahuaPOE_session[ip].cookies,
-        )
-    except Exception as e:
-        LOGGER.exception(f"DahuaPOE_local_post({ip}, {uid}, {url}): exception {e}")
-        DahuaPOE_session[ip].close()
-        DahuaPOE_session[ip] = None
+        LOGGER.error(f"DahuaPOE_local_get({ip}, {uid}, {url}): {str(e)}")
         return None, None
 
+    response.close()
     if response.status_code != requests.codes.ok:
         LOGGER.warning(
-            f"DahuaPOE_local_post({ip}, {uid}, {url}): response code HTTP {response.status_code}"
+            f"DahuaPOE_local_get({ip}, {uid}, {url}): HTTP {response.status_code}: {response.reason}: {response.text}"
         )
         return None, response.text
 
+    LOGGER.debug(f"DahuaPOE_local_get({ip}, {uid}, {url}): {response.text}")
     return response.text, None
 
 
+def DahuaPOE_local_post(ip: str, uid: str, url: str, data):
+    LOGGER.debug(f"DahuaPOE_local_post({ip}, {uid}, {url}, {data})...")
+
+    headers = {
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate",
+        # "Accept-Language": "en-US,en",
+        "Connection": "close",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        # "Origin": f"http://{ip}",
+        # "Referer": f"http://{ip}/",
+        "User-Agent": _USER_AGENT,
+    }
+    if uid:
+        headers["Cookie"] = f"sessionID={uid}"
+        headers["X-Cookie"] = f"sessionID={uid}"
+
+    try:
+        response = requests.post(
+            f"http://{ip}{url}",
+            headers=headers,
+            data={"params": data},
+            verify=False,
+            timeout=(5, 5),
+        )
+    except Exception as e:
+        LOGGER.error(f"DahuaPOE_local_post({ip}, {uid}, {url}): {str(e)}")
+        return None, None
+
+    response.close()
+    if response.status_code != requests.codes.ok:
+        LOGGER.warning(
+            f"DahuaPOE_local_post({ip}, {uid}, {url}): HTTP {response.status_code}: {response.reason}: {response.text}"
+        )
+        return None, response.text
+
+    res = response.text if uid else response.cookies.get_dict().get("sessionID", None)
+    LOGGER.debug(f"DahuaPOE_local_post({ip}, {uid}, {url}, {data}): {res}")
+    return res, None
+
+
 def DahuaPOE_local_login(ip: str, password: str):
-    c = DahuaPOE_local_get(ip, None, "/get_challenge.cgi?params=admin")
+    c, err = DahuaPOE_local_get(ip, None, "/get_challenge.cgi?params=admin")
     if c is None:
-        return None, "invalid_ip"
-    LOGGER.debug(f"DahuaPOE_local_login({ip}): get_challenge: {c}")
+        return None, err or "invalid_ip"
 
     c = c.split("/")
     l = len(c)
@@ -102,9 +109,9 @@ def DahuaPOE_local_login(ip: str, password: str):
             if o == "0"
             else "/" + md5(f"{t}:{n}".encode("utf-8")).hexdigest().upper()
         )
-    LOGGER.debug(f"DahuaPOE_local_login({ip}): login: admin/{e}{n}")
-    res, err = DahuaPOE_local_post(ip, None, "/login.cgi", f"admin/{e}{n}")
-    if res is None:
+
+    uid, err = DahuaPOE_local_post(ip, None, "/login.cgi", f"admin/{e}{n}")
+    if uid is None:
         if err is None or err == "":
             err = "login_failed"
         else:
@@ -125,5 +132,5 @@ def DahuaPOE_local_login(ip: str, password: str):
                 )
                 err = "invalid_password_lock"
         return None, err
-    global DahuaPOE_session
-    return DahuaPOE_session[ip].cookies.get_dict().get("sessionID", None), None
+    LOGGER.debug(f"DahuaPOE_local_login({ip}): uid={uid}")
+    return uid, None
