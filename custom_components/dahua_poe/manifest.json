@@ -7,5 +7,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/slydiman/dahua_poe/issues",
   "requirements": ["requests"],
-  "version": "2025.05.07"
+  "version": "2025.05.08"
 }

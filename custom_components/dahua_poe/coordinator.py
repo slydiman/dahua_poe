@@ -14,11 +14,6 @@ from .const import DOMAIN, LOGGER
 from .protocol import DahuaPOE_local_get, DahuaPOE_local_post, DahuaPOE_local_login
 
 
-_FETCH_TRY = 1
-_LOGIN_TRY = 1
-_ERROR_CNT = 10
-
-
 class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
     def __init__(self, hass: HomeAssistant, ip: str, password: str):
@@ -30,7 +25,6 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
         self.device_info = None
         self.poe = None
         self.tp = None
-        self.error_count = 0
         # self.keepalive = 0
         # self.keepalive_init = 1
 
@@ -56,21 +50,11 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
     def _fetch_data(self) -> None:
         if self._uid is None:
-            for t in range(_LOGIN_TRY):
-                self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-                if self._uid is not None:
-                    break
-                self.error_count += 1
-                LOGGER.warning(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}[{self.error_count}]"
-                )
-                if self.error_count >= _ERROR_CNT:
-                    raise ApiAuthError(
-                        f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                    )
+            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
             if self._uid is None:
-                return
-            self.error_count = 0
+                raise ApiAuthError(
+                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
+                )
         if self.device_info is None:
             info, err = DahuaPOE_local_get(self._ip, self._uid, "/get_device_info.cgi")
             if info is None:
@@ -99,36 +83,26 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
         #        self.keepalive_init = 0
         #    return
 
-        for t in range(_FETCH_TRY):
+        info, err = DahuaPOE_local_get(
+            self._ip,
+            self._uid,
+            "/mutil_call.cgi?mutilreqs=get_power_port.cgi/get_power_cfg.cgi",
+        )
+        if info is None:
+            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
+            if self._uid is None:
+                raise ApiAuthError(
+                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
+                )
             info, err = DahuaPOE_local_get(
                 self._ip,
                 self._uid,
                 "/mutil_call.cgi?mutilreqs=get_power_port.cgi/get_power_cfg.cgi",
             )
-            if info is not None:
-                self.error_count = 0
-                break
-            LOGGER.warning(
-                f"DahuaPOE_local_get({self._ip}, /multi_call.cgi): {err or 'unknown'}"
-            )
-            for l in range(_LOGIN_TRY):
-                self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-                if self._uid is not None:
-                    self.error_count = 0
-                    break
-                self.error_count += 1
-                LOGGER.warning(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}[{self.error_count}]"
+            if info is None:
+                raise ApiError(
+                    f"DahuaPOE_local_get({self._ip}, /multi_call.cgi): {err or 'unknown'}"
                 )
-                if self.error_count >= _ERROR_CNT:
-                    raise ApiAuthError(
-                        f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                    )
-            if self._uid is None:
-                return
-
-        if info is None:
-            return
 
         info = info.split("\n")
         if len(info) < 2:
@@ -176,35 +150,20 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
             raise ApiError(f"_switch_poe_local({ip}): poe is None")
         en = "1" if enable else "0"
         data = f"{port}/{en}/{self.poe[port]['ext']}/{self.poe[port]['watchdog']}/{self.poe[port]['force']}"
-        for t in range(_FETCH_TRY):
+        res, err = DahuaPOE_local_post(self._ip, self._uid, "/set_power_port.cgi", data)
+        if res is None:
+            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
+            if self._uid is None:
+                raise ApiAuthError(
+                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
+                )
             res, err = DahuaPOE_local_post(
                 self._ip, self._uid, "/set_power_port.cgi", data
             )
-            if res is not None:
-                self.error_count = 0
-                break
-            LOGGER.warning(
-                f"DahuaPOE_local_post({self._ip},/set_power_port.cgi, {data}): {err or 'unknown'}"
-            )
-            for l in range(_LOGIN_TRY):
-                self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-                if self._uid is not None:
-                    self.error_count = 0
-                    break
-                self.error_count += 1
-                LOGGER.warning(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}[{self.error_count}]"
+            if res is None:
+                raise ApiError(
+                    f"DahuaPOE_local_post({self._ip},/set_power_port.cgi, {data}): {err or 'unknown'}"
                 )
-                if self.error_count >= _ERROR_CNT:
-                    raise ApiAuthError(
-                        f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                    )
-            if self._uid is None:
-                return
-        if res is None:
-            raise ApiError(
-                f"DahuaPOE_local_post({self._ip},/set_power_port.cgi, {data}): {err or 'unknown'}"
-            )
 
         self.poe[port]["enable"] = en
 
