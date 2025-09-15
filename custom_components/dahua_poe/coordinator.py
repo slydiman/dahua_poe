@@ -125,6 +125,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 "ext": d[4],
                 "watchdog": d[5],
                 "force": d[6],
+                "unknown": d[7] if len(d) > 7 else None  # Since V1.003.0000000.8.R
             }
 
         # info[1] = DahuaPOE_local_get(self._ip, self._uid, "/get_power_cfg.cgi")
@@ -150,6 +151,8 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
             raise ApiError(f"_switch_poe_local({ip}): poe is None")
         en = "1" if enable else "0"
         data = f"{port}/{en}/{self.poe[port]['ext']}/{self.poe[port]['watchdog']}/{self.poe[port]['force']}"
+        if self.poe[port]['unknown'] is not None:
+            data += "/0"
         res, err = DahuaPOE_local_post(self._ip, self._uid, "/set_power_port.cgi", data)
         if res is None:
             self._uid, err = DahuaPOE_local_login(self._ip, self._password)
