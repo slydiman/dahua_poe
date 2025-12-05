@@ -84,23 +84,20 @@ class DahuaPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors["base"] = err
                 else:
                     assert self.entry is not None
+                    new_data = {**self.entry.data}
+                    new_data[CONF_IP_ADDRESS] = ip
+                    new_data[CONF_PASSWORD] = password
                     self.hass.config_entries.async_update_entry(
                         self.entry,
-                        data={
-                            **self.entry.data,
-                            CONF_IP_ADDRESS: ip,
-                            CONF_PASSWORD: password,
-                        },
+                        data=new_data,
                     )
                     await self.hass.config_entries.async_reload(self.entry.entry_id)
                     return self.async_abort(reason="reauth_successful")
 
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_IP_ADDRESS, default=ip if user_input else None): str,
-                vol.Required(
-                    CONF_PASSWORD, default=password if user_input else None
-                ): str,
+                vol.Required(CONF_IP_ADDRESS, default=ip): str,
+                vol.Required(CONF_PASSWORD, default=password): str,
             }
         )
 

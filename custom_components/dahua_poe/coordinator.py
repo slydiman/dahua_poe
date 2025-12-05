@@ -8,7 +8,7 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-import async_timeout
+import asyncio
 from datetime import timedelta
 from .const import DOMAIN, LOGGER
 from .protocol import DahuaPOE_local_get, DahuaPOE_local_post, DahuaPOE_local_login
@@ -37,7 +37,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> None:
         try:
-            async with async_timeout.timeout(10):
+            async with asyncio.timeout(10):
                 return await self.hass.async_add_executor_job(self._fetch_data)
         except ApiAuthError as err:
             self._uid = None
@@ -125,7 +125,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 "ext": d[4],
                 "watchdog": d[5],
                 "force": d[6],
-                "unknown": d[7] if len(d) > 7 else None  # Since V1.003.0000000.8.R
+                "unknown": d[7] if len(d) > 7 else None,  # Since V1.003.0000000.8.R
             }
 
         # info[1] = DahuaPOE_local_get(self._ip, self._uid, "/get_power_cfg.cgi")
@@ -138,7 +138,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
     async def _async_switch_poe(self, port: str, enable: bool) -> None:
         try:
-            async with async_timeout.timeout(2):
+            async with asyncio.timeout(2):
                 return await self.hass.async_add_executor_job(
                     self._switch_poe_local, port, enable
                 )
@@ -151,7 +151,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
             raise ApiError(f"_switch_poe_local({ip}): poe is None")
         en = "1" if enable else "0"
         data = f"{port}/{en}/{self.poe[port]['ext']}/{self.poe[port]['watchdog']}/{self.poe[port]['force']}"
-        if self.poe[port]['unknown'] is not None:
+        if self.poe[port]["unknown"] is not None:
             data += "/0"
         res, err = DahuaPOE_local_post(self._ip, self._uid, "/set_power_port.cgi", data)
         if res is None:
