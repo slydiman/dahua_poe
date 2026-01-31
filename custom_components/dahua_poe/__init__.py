@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, Platform
+from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, CONF_PROTOCOL, Platform
 from .const import DOMAIN
 from .coordinator import DahuaPOE_Coordinator
 
@@ -14,6 +14,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         entry.data.get(CONF_IP_ADDRESS, None),
         entry.data[CONF_PASSWORD],
+        entry.data.get(CONF_PROTOCOL, 0),
     )
     await coordinator.async_config_entry_first_refresh()
     entry.async_on_unload(entry.add_update_listener(update_listener))

@@ -55,11 +55,13 @@ class POEPortSwitch(CoordinatorEntity[DahuaPOE_Coordinator], SwitchEntity):
     async def async_turn_on(self, **kwargs):
         """Turn on."""
         await self.coordinator._async_switch_poe(self._port, True)
+        self._attr_is_on = True
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn off."""
         await self.coordinator._async_switch_poe(self._port, False)
+        self._attr_is_on = False
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

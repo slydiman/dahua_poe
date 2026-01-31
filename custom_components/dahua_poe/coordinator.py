@@ -11,14 +11,21 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 import asyncio
 from datetime import timedelta
 from .const import DOMAIN, LOGGER
-from .protocol import DahuaPOE_local_get, DahuaPOE_local_post, DahuaPOE_local_login
+from .protocol import (
+    DahuaPOE_local_get,
+    DahuaPOE_local_post,
+    DahuaPOE_local_login,
+    DahuaPOE_local_login1,
+    DahuaPOE_local_post1,
+)
 
 
 class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
-    def __init__(self, hass: HomeAssistant, ip: str, password: str):
+    def __init__(self, hass: HomeAssistant, ip: str, password: str, protocol: int):
         self._ip = ip
         self._password = password
+        self.protocol = protocol
         self._uid = None
         self.desc = None
         self.sn = None
@@ -50,30 +57,67 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
     def _fetch_data(self) -> None:
         if self._uid is None:
-            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
+            if self.protocol == 1:
+                self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
+            else:
+                self._uid, err = DahuaPOE_local_login(self._ip, self._password)
             if self._uid is None:
                 raise ApiAuthError(
                     f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
                 )
         if self.device_info is None:
-            info, err = DahuaPOE_local_get(self._ip, self._uid, "/get_device_info.cgi")
-            if info is None:
-                raise ApiError(
-                    f"DahuaPOE_local_get({self._ip}, /get_device_info.cgi): {err or 'unknown'}"
-                )
-            # POE8/DH-CS4010-8ET-110/AH08EBBPAJ00651/F8:CE:07:7B:51:86/V1.001.0000000.7.R/2024-09-28/12919/1/V2.4
-            info = info.split("/")
-            self.desc = info[0]
-            self.sn = info[2]
-            self.device_info = DeviceInfo(
-                identifiers={(DOMAIN, info[2])},
-                manufacturer="Dahua",
-                model=info[1],
-                name=info[0],
-                sw_version=info[4],
-                connections={(CONNECTION_NETWORK_MAC, info[3])},
-            )
+            if self.protocol == 1:
+                self._set_device_info_1()
+            else:
+                self._set_device_info_0()
 
+        if self.protocol == 1:
+            self._fetch_data_1()
+        else:
+            self._fetch_data_0()
+
+    def _set_device_info_0(self):
+        info, err = DahuaPOE_local_get(self._ip, self._uid, "/get_device_info.cgi")
+        if info is None:
+            raise ApiError(
+                f"DahuaPOE_local_get({self._ip}, /get_device_info.cgi): {err or 'unknown'}"
+            )
+        # POE8/DH-CS4010-8ET-110/AH08EBBPAJ00651/F8:CE:07:7B:51:86/V1.001.0000000.7.R/2024-09-28/12919/1/V2.4
+        info = info.split("/")
+        self.desc = info[0]
+        self.sn = info[2]
+        self.device_info = DeviceInfo(
+            identifiers={(DOMAIN, info[2])},
+            manufacturer="Dahua",
+            model=info[1],
+            name=info[0],
+            sw_version=info[4],
+            connections={(CONNECTION_NETWORK_MAC, info[3])},
+        )
+
+    def _set_device_info_1(self):
+        info, err = DahuaPOE_local_post1(
+            self._ip,
+            self._uid,
+            "thing.service.property.get",
+            ["tspPortNumber", "alias", "SN", "model", "firmwareVersion", "ip", "MAC"],
+        )
+        if info is None:
+            raise ApiError(
+                f"DahuaPOE_local_post1({self._ip}, thing.service.property.get): {err or 'unknown'}"
+            )
+        self.desc = info["alias"]
+        self.sn = info["SN"]
+        self.device_info = DeviceInfo(
+            identifiers={(DOMAIN, info["SN"])},
+            manufacturer="Dahua",  # info["vendor"]
+            model=info["model"],
+            name=info["alias"],
+            sw_version=info["firmwareVersion"],  # info["softVersion"]
+            connections={(CONNECTION_NETWORK_MAC, info["MAC"])},
+        )
+
+    def _fetch_data_0(self):
         # if self.keepalive:
         #    self.keepalive = 0
         #    res, err = DahuaPOE_local_post(
@@ -83,25 +127,22 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
         #        self.keepalive_init = 0
         #    return
 
-        info, err = DahuaPOE_local_get(
-            self._ip,
-            self._uid,
-            "/mutil_call.cgi?mutilreqs=get_power_port.cgi/get_power_cfg.cgi",
-        )
-        if info is None:
-            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-            if self._uid is None:
-                raise ApiAuthError(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                )
+        for i in range(2):
             info, err = DahuaPOE_local_get(
                 self._ip,
                 self._uid,
                 "/mutil_call.cgi?mutilreqs=get_power_port.cgi/get_power_cfg.cgi",
             )
-            if info is None:
+            if info is not None:
+                break
+            if i > 0:
                 raise ApiError(
                     f"DahuaPOE_local_get({self._ip}, /multi_call.cgi): {err or 'unknown'}"
+                )
+            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
+            if self._uid is None:
+                raise ApiAuthError(
+                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
                 )
 
         info = info.split("\n")
@@ -136,9 +177,84 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
         # self.keepalive = 1
 
+    def _fetch_data_1(self):
+        for i in range(2):
+            info, err = DahuaPOE_local_post1(
+                self._ip,
+                self._uid,
+                "thing.service.keepAlive",
+                {"active": False, "clientID": self._uid},
+            )
+            if info is not None:
+                break
+            if i > 0:
+                raise ApiError(
+                    f"DahuaPOE_local_post1({self._ip}, thing.service.keepAlive): {err or 'unknown'}"
+                )
+            self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
+            if self._uid is None:
+                raise ApiAuthError(
+                    f"DahuaPOE_local_login1({self._ip}): {err or 'unknown'}"
+                )
+
+        info, err = DahuaPOE_local_post1(
+            self._ip,
+            self._uid,
+            "thing.service.property.get",
+            [
+                "tspPortNumber",
+                "tspUsedPower",
+                "tspTotalPower",
+                "poePortPower",
+            ],
+        )
+        if info is None:
+            raise ApiError(
+                f"DahuaPOE_local_post1({self._ip}, thing.service.property.get): {err or 'unknown'}"
+            )
+
+        self.tp = info["tspUsedPower"]
+
+        if self.poe is None:
+            self.poe = {}
+        power_port = info["poePortPower"]
+        n = len(power_port)
+        for i in range(n):
+            port_name = f"{i+1}"
+            if port_name not in self.poe:
+                self.poe[port_name] = {}
+            bits = power_port[i]
+            power = int(bits[:16], 2)
+            self.poe[port_name]["power"] = power
+
+        i = 0
+        while True:
+            info, err = DahuaPOE_local_post1(
+                self._ip,
+                self._uid,
+                "thing.service.tspGetPoEPortCfg",
+                {"offset": i, "len": n},
+            )
+            if info is None:
+                raise ApiError(
+                    f"DahuaPOE_local_post1({self._ip}, thing.service.tspGetPoEPortCfg): {err or 'unknown'}"
+                )
+            for cfg in info["dataList"]:
+                port_name = str(cfg["portID"])
+                if port_name not in self.poe:
+                    self.poe[port_name] = {}
+                self.poe[port_name]["enable"] = str(int(cfg["poeEnable"]))
+                self.poe[port_name]["ext"] = cfg["longDistanceEnable"]
+                self.poe[port_name]["watchdog"] = cfg["watchDogEnable"]
+                self.poe[port_name]["force"] = cfg["forcePoEEnable"]
+            n = info["total"]
+            i = info["curOffset"]
+            if i >= n:
+                break
+
     async def _async_switch_poe(self, port: str, enable: bool) -> None:
         try:
-            async with asyncio.timeout(2):
+            async with asyncio.timeout(3):
                 return await self.hass.async_add_executor_job(
                     self._switch_poe_local, port, enable
                 )
@@ -149,26 +265,78 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
     def _switch_poe_local(self, port: str, enable: bool) -> None:
         if self.poe is None:
             raise ApiError(f"_switch_poe_local({ip}): poe is None")
-        en = "1" if enable else "0"
-        data = f"{port}/{en}/{self.poe[port]['ext']}/{self.poe[port]['watchdog']}/{self.poe[port]['force']}"
+        if self.protocol == 1:
+            self._switch_poe_local_1(port, enable)
+        else:
+            self._switch_poe_local_0(port, enable)
+        self.poe[port]["enable"] = str(int(enable))
+
+    def _switch_poe_local_0(self, port: str, enable: bool) -> None:
+        data = f"{port}/{str(int(enable))}/{self.poe[port]['ext']}/{self.poe[port]['watchdog']}/{self.poe[port]['force']}"
         if self.poe[port]["unknown"] is not None:
             data += "/0"
-        res, err = DahuaPOE_local_post(self._ip, self._uid, "/set_power_port.cgi", data)
-        if res is None:
+        for i in range(2):
+            res, err = DahuaPOE_local_post(
+                self._ip, self._uid, "/set_power_port.cgi", data
+            )
+            if res is not None:
+                break
+            if i > 0:
+                raise ApiError(
+                    f"DahuaPOE_local_post({self._ip},/set_power_port.cgi, {data}): {err or 'unknown'}"
+                )
             self._uid, err = DahuaPOE_local_login(self._ip, self._password)
             if self._uid is None:
                 raise ApiAuthError(
                     f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
                 )
-            res, err = DahuaPOE_local_post(
-                self._ip, self._uid, "/set_power_port.cgi", data
+
+    def _switch_poe_local_1(self, port: str, enable: bool):
+        for i in range(2):
+            info, err = DahuaPOE_local_post1(
+                self._ip,
+                self._uid,
+                "thing.service.tspGetPoEPortCfg",
+                {"offset": int(port) - 1, "len": 1},
             )
-            if res is None:
+            if info is not None:
+                break
+            if i > 0:
                 raise ApiError(
-                    f"DahuaPOE_local_post({self._ip},/set_power_port.cgi, {data}): {err or 'unknown'}"
+                    f"DahuaPOE_local_post1({self._ip}, thing.service.tspGetPoEPortCfg): {err or 'unknown'}"
+                )
+            self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
+            if self._uid is None:
+                raise ApiAuthError(
+                    f"DahuaPOE_local_login1({self._ip}): {err or 'unknown'}"
                 )
 
-        self.poe[port]["enable"] = en
+        cfg = info["dataList"][0]
+        res, err = DahuaPOE_local_post1(
+            self._ip,
+            self._uid,
+            "thing.service.setPoePortCfgBatch",
+            {
+                "poePortInfo": [
+                    {
+                        "poePortCfg": {
+                            "poeEnable": int(enable),
+                            "longDistanceEnable": int(cfg["longDistanceEnable"]),
+                            "watchDogEnable": int(cfg["watchDogEnable"]),
+                            "forcePoeEnable": int(cfg["forcePoEEnable"]),
+                            "enhancedPoeEnable": cfg["enhancedPoeEnable"],
+                        },
+                        "poePortListInfo": [
+                            "00000000" + f"{int(port):b}".zfill(8) + "000000000000"
+                        ],
+                    }
+                ]
+            },
+        )
+        if res is None:
+            raise ApiError(
+                f"DahuaPOE_local_post1({self._ip}, thing.service.setPoePortCfgBatch): {err or 'unknown'}"
+            )
 
 
 class ApiError(HomeAssistantError):

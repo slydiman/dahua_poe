@@ -8,7 +8,9 @@
 
 Unofficial integration for Home Assistant to local control [Dahua managed POE switches](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution).
 
-Tested with [DH-CS4010-8ET-110](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution/NetworkSwitch/CS4010-8ET-110) and [DH-CS4006-4ET-60](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution/NetworkSwitch/CS4006-4ET-60).
+Tested with [DH-CS4006-4ET-60](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution/NetworkSwitch/CS4006-4ET-60), [DH-CS4010-8ET-110](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution/NetworkSwitch/CS4010-8ET-110) and [DH-CS4010-8ET2GT-110](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution/NetworkSwitch/CS4010-8ET2GT-110).
+
+Supported old WEB UI with the firmware `V1.00*.0000000.*` and new Dahua API /things/v1/* since firmware `V1.003.0000001.*`.
 
 # Installation
 

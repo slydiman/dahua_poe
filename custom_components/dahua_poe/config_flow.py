@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigEntry
-from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
+from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, CONF_PROTOCOL
 from .const import DOMAIN, LOGGER
 from .protocol import (
     DahuaPOE_local_get,
     DahuaPOE_local_login,
+    DahuaPOE_local_login1,
+    DahuaPOE_local_post1,
 )
 
 
@@ -24,20 +26,43 @@ class DahuaPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
 
                 def login():
+                    protocol = 0
                     uid, err = DahuaPOE_local_login(ip, password)
+                    if uid is None and err == "invalid_ip":
+                        # Try v1
+                        uid, err = DahuaPOE_local_login1(ip, password)
+                        if uid is not None:
+                            protocol = 1  # Upgrade ptotocol
                     if uid:
-                        info, err = DahuaPOE_local_get(ip, uid, "/get_device_info.cgi")
-                        if info:
-                            # POE8/DH-CS4010-8ET-110/AH08EBBPAJ00651/F8:CE:07:7B:51:86/V1.001.0000000.7.R/2024-09-28/12919/1/V2.4
-                            uid = info.split("/")[0]
+                        if protocol == 1:
+                            info, err = DahuaPOE_local_post1(
+                                ip,
+                                uid,
+                                "thing.service.property.get",
+                                [
+                                    "alias",
+                                ],
+                            )
+                            if info:
+                                uid = info["alias"]
+                            else:
+                                uid = ip
                         else:
-                            uid = ip
-                    return uid, err or "unknown"
+                            info, err = DahuaPOE_local_get(
+                                ip, uid, "/get_device_info.cgi"
+                            )
+                            if info:
+                                # POE8/DH-CS4010-8ET-110/AH08EBBPAJ00651/F8:CE:07:7B:51:86/V1.001.0000000.7.R/2024-09-28/12919/1/V2.4
+                                uid = info.split("/")[0]
+                            else:
+                                uid = ip
+                    return uid, err or "unknown", protocol
 
-                title, err = await self.hass.async_add_executor_job(login)
+                title, err, protocol = await self.hass.async_add_executor_job(login)
                 if title is None:
                     errors["base"] = err
                 else:
+                    user_input[CONF_PROTOCOL] = protocol
                     return self.async_create_entry(title=title, data=user_input)
 
         # If there is no user input or there were errors,
@@ -68,6 +93,7 @@ class DahuaPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         ip = self.entry.data.get(CONF_IP_ADDRESS)
         password = self.entry.data.get(CONF_PASSWORD)
+        protocol = self.entry.data.get(CONF_PROTOCOL, 0)
         if user_input:
             ip = user_input.get(CONF_IP_ADDRESS, ip)
             password = user_input.get(CONF_PASSWORD, password)
@@ -76,10 +102,21 @@ class DahuaPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors[CONF_PASSWORD] = "invalid_password"
             else:
 
-                def login():
-                    return DahuaPOE_local_login(ip, password)
+                def login(protocol):
+                    if protocol == 1:
+                        uid, err = DahuaPOE_local_login1(ip, password)
+                        return uid, err, protocol
+                    uid, err = DahuaPOE_local_login(ip, password)
+                    if uid is None and err == "invalid_ip":
+                        # Try v1
+                        uid, err = DahuaPOE_local_login1(ip, password)
+                        if uid is not None:
+                            protocol = 1  # Upgrade ptotocol
+                    return uid, err, protocol
 
-                uid, err = await self.hass.async_add_executor_job(login)
+                uid, err, protocol = await self.hass.async_add_executor_job(
+                    login, protocol
+                )
                 if uid is None:
                     errors["base"] = err
                 else:
@@ -87,6 +124,7 @@ class DahuaPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     new_data = {**self.entry.data}
                     new_data[CONF_IP_ADDRESS] = ip
                     new_data[CONF_PASSWORD] = password
+                    new_data[CONF_PROTOCOL] = protocol
                     self.hass.config_entries.async_update_entry(
                         self.entry,
                         data=new_data,
