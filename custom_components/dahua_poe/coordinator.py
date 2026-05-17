@@ -8,6 +8,8 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, CONF_PROTOCOL
+
 import asyncio
 from datetime import timedelta
 from .const import DOMAIN, LOGGER
@@ -22,10 +24,10 @@ from .protocol import (
 
 class DahuaPOE_Coordinator(DataUpdateCoordinator):
 
-    def __init__(self, hass: HomeAssistant, ip: str, password: str, protocol: int):
-        self._ip = ip
-        self._password = password
-        self.protocol = protocol
+    def __init__(self, hass: HomeAssistant, config_entry):
+        self._ip = config_entry.data.get(CONF_IP_ADDRESS, None)
+        self._password = config_entry.data[CONF_PASSWORD]
+        self.protocol = config_entry.data.get(CONF_PROTOCOL, 0)
         self._uid = None
         self.desc = None
         self.sn = None
@@ -40,6 +42,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
             LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=30),  # 15
+            config_entry=config_entry,
         )
 
     async def _async_update_data(self) -> None:
