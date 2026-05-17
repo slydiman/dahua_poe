@@ -30,8 +30,8 @@ class POEPortSwitch(CoordinatorEntity[DahuaPOE_Coordinator], SwitchEntity):
         self._port = port
         super().__init__(coordinator, context=(coordinator.sn))
         self._attr_name = f"{coordinator.desc} Port {port} POE"
-        self._attr_unique_id = f"{coordinator.sn}_{port}_switch".lower()
-        self.entity_id = f"{DOMAIN}.{coordinator.sn}_{port}_switch".lower()
+        self._attr_unique_id = f"{coordinator.sn}_{port}_poe".lower()
+        self.entity_id = f"switch.{coordinator.sn}_{port}_poe".lower()
         self._attr_device_info = coordinator.device_info
 
     @property

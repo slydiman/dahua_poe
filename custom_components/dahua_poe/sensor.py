@@ -50,11 +50,11 @@ class PortBaseSensor(CoordinatorEntity[DahuaPOE_Coordinator], SensorEntity):
             total = "total_" if self._total else ""
             self._attr_name = f"{coordinator.desc} {Total}{self._desc_name}"
             self._attr_unique_id = f"{coordinator.sn}_{total}{self._id_name}".lower()
-            self.entity_id = f"{DOMAIN}.{coordinator.sn}_{total}{self._id_name}".lower()
+            self.entity_id = f"sensor.{coordinator.sn}_{total}{self._id_name}".lower()
         else:
             self._attr_name = f"{coordinator.desc} Port {port} {self._desc_name}"
             self._attr_unique_id = f"{coordinator.sn}_{port}_{self._id_name}".lower()
-            self.entity_id = f"{DOMAIN}.{coordinator.sn}_{port}_{self._id_name}".lower()
+            self.entity_id = f"sensor.{coordinator.sn}_{port}_{self._id_name}".lower()
         self._attr_device_info = coordinator.device_info
 
     @callback
