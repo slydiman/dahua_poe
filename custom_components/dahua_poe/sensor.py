@@ -26,11 +26,14 @@ async def async_setup_entry(
     coordinator: DahuaPOE_Coordinator = hass.data[DOMAIN][config_entry.entry_id]
     new_devices = []
 
-    if coordinator.device_info and coordinator.poe:
-        new_devices.append(PortPowerSensor(coordinator, ""))
-
-        for port in coordinator.poe:
-            new_devices.append(PortPowerSensor(coordinator, port))
+    if coordinator.device_info:
+        if coordinator.poe:
+            new_devices.append(PortPowerSensor(coordinator, ""))
+            for port in coordinator.poe:
+                new_devices.append(PortPowerSensor(coordinator, port))
+        if coordinator.ports:
+            for port in coordinator.ports:
+                new_devices.append(PortLinkSensor(coordinator, port))
 
     if new_devices:
         async_add_entities(new_devices)
@@ -52,18 +55,19 @@ class PortBaseSensor(CoordinatorEntity[DahuaPOE_Coordinator], SensorEntity):
             self._attr_unique_id = f"{coordinator.sn}_{total}{self._id_name}".lower()
             self.entity_id = f"sensor.{coordinator.sn}_{total}{self._id_name}".lower()
         else:
-            self._attr_name = f"{coordinator.desc} Port {port} {self._desc_name}"
+            port_desc = self.coordinator.get_port_desc(self._port)
+            self._attr_name = f"{coordinator.desc} Port {port_desc} {self._desc_name}"
             self._attr_unique_id = f"{coordinator.sn}_{port}_{self._id_name}".lower()
             self.entity_id = f"sensor.{coordinator.sn}_{port}_{self._id_name}".lower()
         self._attr_device_info = coordinator.device_info
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self._attr_native_value = self._handle_coordinator_update_fix(self._port)
+        self._attr_native_value = self._handle_coordinator_update_fix()
         self.async_write_ha_state()
         super()._handle_coordinator_update()
 
-    def _handle_coordinator_update_fix(self, port: str):
+    def _handle_coordinator_update_fix(self):
         return ""
 
     #    def _kb2mb(self, val):
@@ -85,8 +89,27 @@ class PortPowerSensor(PortBaseSensor):
     _id_name = "power"
     _total = True
 
-    def _handle_coordinator_update_fix(self, port: str):
-        if port == "":
+    def _handle_coordinator_update_fix(self):
+        if self._port == "":
             return int(self.coordinator.tp) / 10.0
         else:
-            return int(self.coordinator.poe[self._port]["power"]) / 10.0
+            return int(self.coordinator.poe[self._port].get("power", 0)) / 10.0
+
+
+class PortLinkSensor(PortBaseSensor):
+    # _attr_native_unit_of_measurement = UnitOfDataRate.MEGABITS_PER_SECOND
+    _attr_device_class = SensorDeviceClass.ENUM
+    # _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _attr_icon = "mdi:lan-connect"
+
+    _desc_name = "Link"
+    _id_name = "link"
+
+    def _handle_coordinator_update_fix(self):
+        negotiate_rate = self.coordinator.ports[self._port].get("negotiate_rate", 0)
+        duplex_mode = self.coordinator.ports[self._port].get("duplex_mode", 0)
+        if negotiate_rate == 0:
+            return "DOWN"
+        return f"{negotiate_rate}M_{'FULL' if duplex_mode == 1 else 'HALF'}"
