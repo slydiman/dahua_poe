@@ -45,4 +45,4 @@ You need to know the IP address in the local network and the password.
 
 # Usage
 
-This integration exposes power sensors and POE control switches. 
+This integration exposes power sensors and POE control switches.
