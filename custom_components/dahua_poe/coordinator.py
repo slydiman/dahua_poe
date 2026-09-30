@@ -317,7 +317,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 self._ip,
                 self._uid,
                 "thing.service.keepAlive",
-                {"active": False, "clientID": self._uid},
+                {"active": True, "clientID": self._uid},
             )
             if info is not None:
                 break
