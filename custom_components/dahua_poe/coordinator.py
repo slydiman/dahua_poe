@@ -41,8 +41,6 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
         self.poe = None
         self.tp = None
         self.ports = None
-        # self.keepalive = 0
-        # self.keepalive_init = 1
 
         super().__init__(
             hass,
@@ -193,29 +191,16 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 break
 
     def _fetch_data_0(self):
-        # if self.keepalive:
-        #    self.keepalive = 0
-        #    res, err = DahuaPOE_local_post(
-        #        self._ip, self._uid, "/keepalive.cgi", self.keepalive_init
-        #    )
-        #    if res is not None:
-        #        self.keepalive_init = 0
-        #    return
-
         ports = len(self.ports) if self.ports else 0
         ports = f"/&params=0/{ports}" if ports > 0 else ""
 
         for i in range(2):
-            info, err = DahuaPOE_local_get(
-                self._ip,
-                self._uid,
-                f"/mutil_call.cgi?mutilreqs=get_power_port.cgi/get_power_cfg.cgi/port_get_conf.cgi{ports}",
-            )
+            info, err = DahuaPOE_local_post(self._ip, self._uid, "/keepalive.cgi", 1)
             if info is not None:
                 break
             if i > 0:
                 raise ApiError(
-                    f"DahuaPOE_local_get({self._ip}, /multi_call.cgi): {err or 'unknown'}"
+                    f"DahuaPOE_local_get({self._ip}, /keepalive.cgi): {err or 'unknown'}"
                 )
             self._uid, err = DahuaPOE_local_login(self._ip, self._password)
             if self._uid is None:
@@ -223,6 +208,16 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                     f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
                 )
             self._uid_write = True
+
+        info, err = DahuaPOE_local_get(
+            self._ip,
+            self._uid,
+            f"/mutil_call.cgi?mutilreqs=get_power_port.cgi/get_power_cfg.cgi/port_get_conf.cgi{ports}",
+        )
+        if info is None:
+            raise ApiError(
+                f"DahuaPOE_local_get({self._ip}, /multi_call.cgi): {err or 'unknown'}"
+            )
 
         info = info.split("\n")
         if len(info) < 2:
