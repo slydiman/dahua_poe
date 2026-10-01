@@ -3,7 +3,6 @@
 <p align="center">
   <a href="https://github.com/slydiman/dahua_poe/releases"><img src="https://img.shields.io/github/v/release/slydiman/dahua_poe?display_name=tag&include_prereleases&sort=semver" alt="Current version" /></a>
   <img alt="GitHub" src="https://img.shields.io/github/license/slydiman/dahua_poe" />
-  <img alt="GitHub manifest.json dynamic (path)" src="https://img.shields.io/github/manifest-json/requirements/slydiman/dahua_poe%2Fmain%2Fcustom_components%2Fdahua_poe?label=requirements" />
 </p>
 
 Unofficial integration for Home Assistant to local control [Dahua managed POE switches](https://transmission.dahuasecurity.com/en/product-list/Business/CloudManagementSolution).
