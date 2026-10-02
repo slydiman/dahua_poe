@@ -20,9 +20,9 @@ from datetime import timedelta
 from .const import DOMAIN, LOGGER
 from .protocol import (
     DahuaPOE_local_get,
-    DahuaPOE_local_post,
     DahuaPOE_local_login,
     DahuaPOE_local_login1,
+    DahuaPOE_local_post,
     DahuaPOE_local_post1,
 )
 
@@ -50,6 +50,31 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
             config_entry=config_entry,
         )
 
+    def login(self):
+        if self.protocol == 1:
+            self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
+            if self._uid is None:
+                if err == "forbidden":
+                    raise ApiAuthError(
+                        f"DahuaPOE_local_login1({self._ip}): {err or 'unknown'}"
+                    )
+                else:
+                    raise ApiError(
+                        f"DahuaPOE_local_login1({self._ip}): {err or 'unknown'}"
+                    )
+        else:
+            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
+            if self._uid is None:
+                if err == "invalid_password" or err == "invalid_password_lock":
+                    raise ApiAuthError(
+                        f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
+                    )
+                else:
+                    raise ApiError(
+                        f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
+                    )
+        self._uid_write = True
+
     def get_port_desc(self, port: str) -> str:
         desc = self.ports.get(port, {}).get("desc", port) if self.ports else port
         return desc if desc else port
@@ -71,31 +96,21 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
         try:
             async with asyncio.timeout(10):
                 await self.hass.async_add_executor_job(self._fetch_data)
-        except ApiAuthError as err:
+        except Exception as ex:
             self._uid = None
             self._uid_write = True
             self.write_token()
-            # Raising ConfigEntryAuthFailed will cancel future updates
-            # and start a config flow with SOURCE_REAUTH (async_step_reauth)
-            raise ConfigEntryAuthFailed from err
-        except ApiError as err:
-            self._uid = None
-            self._uid_write = True
-            self.write_token()
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            if isinstance(ex, ApiAuthError):
+                # Raising ConfigEntryAuthFailed will cancel future updates
+                # and start a config flow with SOURCE_REAUTH (async_step_reauth)
+                raise ConfigEntryAuthFailed from ex
+            else:  # ApiError or TimeoutError
+                raise UpdateFailed(f"Error communicating with API: {str(ex)}")
         self.write_token()
 
     def _fetch_data(self) -> None:
         if self._uid is None:
-            if self.protocol == 1:
-                self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
-            else:
-                self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-            if self._uid is None:
-                raise ApiAuthError(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                )
-            self._uid_write = True
+            self.login()
         if self.device_info is None:
             if self.protocol == 1:
                 self._set_device_info_1()
@@ -202,12 +217,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 raise ApiError(
                     f"DahuaPOE_local_get({self._ip}, /keepalive.cgi): {err or 'unknown'}"
                 )
-            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-            if self._uid is None:
-                raise ApiAuthError(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                )
-            self._uid_write = True
+            self.login()
 
         info, err = DahuaPOE_local_get(
             self._ip,
@@ -320,12 +330,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 raise ApiError(
                     f"DahuaPOE_local_post1({self._ip}, thing.service.keepAlive): {err or 'unknown'}"
                 )
-            self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
-            if self._uid is None:
-                raise ApiAuthError(
-                    f"DahuaPOE_local_login1({self._ip}): {err or 'unknown'}"
-                )
-            self._uid_write = True
+            self.login()
 
         info, err = DahuaPOE_local_post1(
             self._ip,
@@ -409,10 +414,10 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 return await self.hass.async_add_executor_job(
                     self._switch_poe_local, port, enable
                 )
-        except ApiError as err:
+        except Exception as ex:  # ApiError or TimeoutError
             self._uid = None
             self._uid_write = True
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            raise UpdateFailed(f"Error communicating with API: {str(ex)}")
 
     def _switch_poe_local(self, port: str, enable: bool) -> None:
         if self.poe is None:
@@ -437,12 +442,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 raise ApiError(
                     f"DahuaPOE_local_post({self._ip},/set_power_port.cgi, {data}): {err or 'unknown'}"
                 )
-            self._uid, err = DahuaPOE_local_login(self._ip, self._password)
-            if self._uid is None:
-                raise ApiAuthError(
-                    f"DahuaPOE_local_login({self._ip}): {err or 'unknown'}"
-                )
-            self._uid_write = True
+            self.login()
 
     def _switch_poe_local_1(self, port: str, enable: bool):
         for i in range(2):
@@ -458,12 +458,7 @@ class DahuaPOE_Coordinator(DataUpdateCoordinator):
                 raise ApiError(
                     f"DahuaPOE_local_post1({self._ip}, thing.service.tspGetPoEPortCfg): {err or 'unknown'}"
                 )
-            self._uid, err = DahuaPOE_local_login1(self._ip, self._password)
-            if self._uid is None:
-                raise ApiAuthError(
-                    f"DahuaPOE_local_login1({self._ip}): {err or 'unknown'}"
-                )
-            self._uid_write = True
+            self.login()
 
         cfg = info["dataList"][0]
         res, err = DahuaPOE_local_post1(

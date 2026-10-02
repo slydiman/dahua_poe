@@ -43,7 +43,7 @@ def DahuaPOE_local_get(ip: str, uid: str, url: str):
         )
     except Exception as e:
         LOGGER.error(f"DahuaPOE_local_get({ip}, {uid}, {url}): {str(e)}")
-        return None, None
+        return None, str(e)
 
     if response.status_code != requests.codes.ok:
         LOGGER.warning(
@@ -131,7 +131,7 @@ def DahuaPOE_local_post(ip: str, uid: str, url: str, data):
 
     except Exception as e:
         LOGGER.error(f"DahuaPOE_local_post({ip}, {uid}, {url}): {str(e)}")
-        return None, None
+        return None, str(e)
 
     if response_status_code != requests.codes.ok:
         LOGGER.warning(
@@ -231,7 +231,7 @@ def DahuaPOE_local_login1_get(ip: str, username: str, digest=None, url=_URL_LOGI
         LOGGER.error(
             f"DahuaPOE_local_login1_get({ip}, {username}, {digest}, {url}): {str(e)}"
         )
-        return None, None
+        return None, str(e), None
 
     if response.status_code == requests.codes.unauthorized:
         digest = response.headers.get("Custom-Authenticate", None)
@@ -247,18 +247,24 @@ def DahuaPOE_local_login1_get(ip: str, username: str, digest=None, url=_URL_LOGI
             LOGGER.debug(
                 f"DahuaPOE_local_login1_get({ip}, {username}, {digest}, {url}): {digest}"
             )
-            return None, digest
+            return None, "unauthorized", digest
 
         LOGGER.warning(
             f"DahuaPOE_local_login1_get({ip}, {username}, {digest}, {url}): HTTP {response.status_code}: {response.reason}: {response.headers} {response.text}"
         )
-        return None, None
+        return None, "unauthorized", None
 
     elif response.status_code != requests.codes.ok:
         LOGGER.warning(
             f"DahuaPOE_local_login1_get({ip}, {username}, {digest}, {url}): HTTP {response.status_code}: {response.reason}: {response.text}"
         )
-        return None, None
+        return (
+            None,
+            requests.status_codes._codes.get(
+                response.status_code, (f"HTTP {response.status_code}",)
+            )[0],
+            None,
+        )
 
     try:
         j = json.loads(response.text)
@@ -266,10 +272,10 @@ def DahuaPOE_local_login1_get(ip: str, username: str, digest=None, url=_URL_LOGI
         LOGGER.error(
             f"DahuaPOE_local_login1_get({ip}, {username}, {digest}, {url}): HTTP {response.status_code}: {response.reason}: {response.text}"
         )
-        return None, None
+        return None, str(e), None
 
     LOGGER.debug(f"DahuaPOE_local_login1_get({ip}, {username}, {digest}, {url}): {j}")
-    return j, None
+    return j, None, None
 
 
 _ERRORS = {
@@ -352,7 +358,7 @@ _ERRORS = {
 
 
 def DahuaPOE_local_login1(ip: str, password: str):
-    _, digest = DahuaPOE_local_login1_get(ip, _USERNAME)
+    _, err, digest = DahuaPOE_local_login1_get(ip, _USERNAME)
     if digest is None:
         return None, "invalid_ip"
 
@@ -368,7 +374,7 @@ def DahuaPOE_local_login1(ip: str, password: str):
         or nonce is None
     ):
         LOGGER.error(f"DahuaPOE_local_login1({ip}): Invalid digest {digest}")
-        return None, "unknown"
+        return None, f"unknown algorithm {algorithm}"
 
     url = f"GET:{_URL_LOGIN1}"
 
@@ -408,9 +414,9 @@ def DahuaPOE_local_login1(ip: str, password: str):
                 .lower()
             )
 
-    j, _ = DahuaPOE_local_login1_get(ip, _USERNAME, digest)
+    j, err, _ = DahuaPOE_local_login1_get(ip, _USERNAME, digest)
     if j is None or "Token" not in j:
-        err = j.get("ErrorCode", "unknown") if j else "unknown"
+        err = j.get("ErrorCode", "unknown ErrorCode") if j else err
         err = _ERRORS.get(err, str(err))
         LOGGER.error(f"DahuaPOE_local_login1({ip}): Invalid Token {j}, {err}")
         return None, err
@@ -2514,7 +2520,7 @@ def DahuaPOE_local_post1(ip: str, uid: str, method: str, data, url=_URL_SERVICE1
         LOGGER.error(
             f"DahuaPOE_local_post1({ip}, {uid}, {method}, {data}, {url}): {str(e)}"
         )
-        return None, None
+        return None, str(e)
 
     if response_status_code != requests.codes.ok:
         LOGGER.warning(
@@ -2530,7 +2536,7 @@ def DahuaPOE_local_post1(ip: str, uid: str, method: str, data, url=_URL_SERVICE1
         LOGGER.error(
             f"DahuaPOE_local_post1({ip}, {uid}, {method}, {data}, {url}): response {''.join(format(b, '02x') for b in raw_resp)}\r\n{str(e)}"
         )
-        return None, None
+        return None, str(e)
 
     LOGGER.debug(
         f"DahuaPOE_local_post1({ip}, {uid}, {method}, {data}, {url}): response {''.join(format(b, '02x') for b in raw_resp)}\r\n{res}"
